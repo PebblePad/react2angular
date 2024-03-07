@@ -1,5 +1,10 @@
 # Changelog
 
+### 5.0.0
+
+- [major] Update peer dep `react` and `react-dom` versions 18
+- [major] Update render method to use react 18 roots
+
 ### 4.0.4
 
 - [patch] Use TypeScript Strict mode 4447c1967a77ffba8d3d6a6c419a5a8b47844d17
