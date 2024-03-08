@@ -3,7 +3,9 @@ import {
   element as $,
   IAugmentedJQuery,
   ICompileService,
-  IComponentOptions, IController,
+  IComponentOptions,
+  IController,
+  IHttpResponse,
   IHttpService,
   IQService, IScope,
   module
@@ -12,9 +14,15 @@ import * as angular from 'angular'
 import 'angular-mocks'
 import { $http, $q, $rootScope } from 'ngimport'
 import * as PropTypes from 'prop-types'
+import { PropsWithChildren } from 'react'
 import * as React from 'react'
 import { Simulate } from 'react-dom/test-utils'
 import { react2angular } from './'
+
+const runRenderCycle = async () => {
+  $rootScope.$apply()
+  await new Promise((resolve) => setTimeout(resolve))
+}
 
 class TestOne extends React.Component<Props> {
   render() {
@@ -28,7 +36,7 @@ class TestOne extends React.Component<Props> {
   componentWillUnmount() { }
 }
 
-const TestTwo: React.StatelessComponent<Props> = props =>
+const TestTwo: React.FunctionComponent<Props> = props =>
   <div>
     <p>Foo: {props.foo}</p>
     <p>Bar: {props.bar.join(',')}</p>
@@ -36,7 +44,7 @@ const TestTwo: React.StatelessComponent<Props> = props =>
     {props.children}
   </div>
 
-const TestThree: React.StatelessComponent = () =>
+const TestThree: React.FunctionComponent = () =>
   <div>Foo</div>
 
 class TestFour extends React.Component<Props> {
@@ -180,11 +188,7 @@ module('test', ['bcherny/ngimport'])
 
 bootstrap($(), ['test'], { strictDi: true })
 
-interface Props {
-  bar: boolean[]
-  baz(value: number): any
-  foo: number
-}
+type Props = PropsWithChildren<{ bar: boolean[], baz(value: number): any, foo: number}>
 
 describe('react2angular', () => {
 
@@ -265,7 +269,7 @@ describe('react2angular', () => {
       expect(element.text()).toBe('Foo')
     })
 
-    it('should update', () => {
+    it('should update', async () => {
       const scope = Object.assign($rootScope.$new(true), {
         bar: [true, false],
         baz: (value: number) => value + 1,
@@ -275,9 +279,8 @@ describe('react2angular', () => {
       $compile(element)(scope)
       $rootScope.$apply()
       expect(element.find('p').eq(1).text()).toBe('Bar: true,false')
-      scope.$apply(() =>
-        scope.bar = [false, true, true]
-      )
+      scope.bar = [false, true, true]
+      await runRenderCycle()
       expect(element.find('p').eq(1).text()).toBe('Bar: false,true,true')
     })
 
@@ -322,8 +325,8 @@ describe('react2angular', () => {
       expect(element.find('span').length).toBe(0)
     })
 
-    it('should take injections, which override props', () => {
-      spyOn($http, 'get').and.returnValue($q.resolve({ data: '$http response' }))
+    it('should take injections, which override props', async () => {
+      spyOn($http, 'get').and.returnValue($q.resolve({ data: '$http response' } as IHttpResponse<string>))
       const scope = Object.assign($rootScope.$new(true), {
         foo: 'FOO'
       })
@@ -333,8 +336,7 @@ describe('react2angular', () => {
 
       const element2 = $(`<test-angular-seven foo="foo"></test-angular-seven>`)
       $compile(element2)(scope)
-
-      $rootScope.$apply()
+      await runRenderCycle()
 
       expect($http.get).toHaveBeenCalledWith('https://example.com/')
       expect(element1.find('p').eq(0).text()).toBe('$http response', '$http is injected')
@@ -368,7 +370,7 @@ describe('react2angular', () => {
       expect(element.text()).toBe('Foo')
     })
 
-    it('should update', () => {
+    it('should update', async () => {
       const scope = Object.assign($rootScope.$new(true), {
         bar: [true, false],
         baz: (value: number) => value + 1,
@@ -378,14 +380,22 @@ describe('react2angular', () => {
       $compile(element)(scope)
       $rootScope.$apply()
       expect(element.find('p').eq(1).text()).toBe('Bar: true,false')
-      scope.$apply(() =>
-        scope.bar = [false, true, true]
-      )
+
+      scope.bar = [false, true, true]
+      await runRenderCycle()
       expect(element.find('p').eq(1).text()).toBe('Bar: false,true,true')
     })
 
-    // TODO: figure out how to test this
-    xit('should destroy', () => { })
+    it('should destroy', async () => {
+      const scope = $rootScope.$new(true)
+      const element = $(`<test-angular-three></test-angular-three>`)
+      $compile(element)(scope)
+      await runRenderCycle()
+
+      scope.$destroy()
+      await runRenderCycle()
+      expect(element[0].innerHTML).toBe('')
+    })
 
     it('should take callbacks', () => {
       const baz = jasmine.createSpy('baz')
